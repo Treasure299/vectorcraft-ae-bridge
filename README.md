@@ -14,6 +14,7 @@ An original, dockable After Effects 26.5 ScriptUI panel that transfers the curre
 - One-layer transparent PNG rasterization for complex appearances and effects
 - Project-local raster assets by default (`VectorCraft Bridge Assets` beside the saved `.aep`)
 - Buttons to open the active assets folder or choose a persistent custom folder
+- Fast direct-to-disk raster transfer without Base64 decoding in After Effects
 - Artboard-relative coordinates and optional composition centering
 - Persistent source metadata in After Effects layer comments
 
@@ -31,6 +32,8 @@ Gradients, patterns, images, clipping masks, live effects, and advanced text run
 Select artwork in VectorCraft, open an AE composition, and click **Push Selection**. **New Comp** creates a composition matching the selected artwork's artboard.
 
 Raster pushes are saved in a **VectorCraft Bridge Assets** folder beside the saved After Effects project. Use **Open Assets Folder** to reveal it or **Choose Assets Folder** to use another location. Unsaved AE projects must be saved first unless a custom assets folder has been chosen.
+
+Raster mode exports exactly the objects selected in VectorCraft. If an appearance is built from separate front, backdrop, extrusion, or shadow objects, select all of them or group them before pushing.
 
 Built by **VAULTR**.
 

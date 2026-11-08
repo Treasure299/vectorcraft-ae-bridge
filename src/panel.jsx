@@ -2,7 +2,7 @@
 (function vectorCraftBridge(thisObj) {
     var C = VCABCore;
     var SECTION = "VectorCraft Bridge";
-    var VERSION = "0.3.0";
+    var VERSION = "0.3.1";
     var serial = 0;
 
     function setting(name, fallback) {
@@ -187,21 +187,6 @@
         t.property("ADBE Position").setValue([0, 0]);
         return l;
     }
-    function decodeBase64(text) {
-        var alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/", clean = String(text || "").replace(/[^A-Za-z0-9\+\/\=]/g, "");
-        var out = [], i, a, b, c, d, n;
-        for (i = 0; i < clean.length; i += 4) {
-            a = alphabet.indexOf(clean.charAt(i)); b = alphabet.indexOf(clean.charAt(i + 1));
-            c = clean.charAt(i + 2) === "=" ? -1 : alphabet.indexOf(clean.charAt(i + 2));
-            d = clean.charAt(i + 3) === "=" ? -1 : alphabet.indexOf(clean.charAt(i + 3));
-            if (a < 0 || b < 0) continue;
-            n = (a << 18) | (b << 12) | ((c < 0 ? 0 : c) << 6) | (d < 0 ? 0 : d);
-            out.push(String.fromCharCode((n >> 16) & 255));
-            if (c >= 0) out.push(String.fromCharCode((n >> 8) & 255));
-            if (d >= 0) out.push(String.fromCharCode(n & 255));
-        }
-        return out.join("");
-    }
     function assetFolder(createIfMissing) {
         var custom = setting("assetFolder", ""), folder;
         if (custom) {
@@ -218,25 +203,20 @@
         function pad(v, n) { v = String(v); while (v.length < n) v = "0" + v; return v; }
         return d.getFullYear() + pad(d.getMonth() + 1, 2) + pad(d.getDate(), 2) + "_" + pad(d.getHours(), 2) + pad(d.getMinutes(), 2) + pad(d.getSeconds(), 2) + "_" + pad(d.getMilliseconds(), 3);
     }
-    function writePng(dataBase64) {
-        var file = new File(assetFolder(true).fsName + "/VectorCraft_" + stamp() + ".png"), bytes = decodeBase64(dataBase64);
-        if (!bytes.length) fail("VectorCraft returned an empty PNG.");
-        file.encoding = "BINARY";
-        if (!file.open("w")) fail("Could not create the PNG asset: " + file.fsName);
-        try { file.write(bytes); } finally { file.close(); }
-        return file;
+    function nextRasterFile() {
+        return new File(assetFolder(true).fsName + "/VectorCraft_" + stamp() + ".png");
     }
     function rasterTransfer(port, comp, options) {
         var doc = rpc(port, "document.inspect", { depth: 0 }), board, result, file, footage, layer, t, bounds, scale = 2, offset;
         if (!doc.selection || !doc.selection.length) fail("Select artwork in VectorCraft first.");
         board = C.artboard(doc, options.artboard);
-        // document.exportSelection is also VectorCraft's interactive "Export Selection..."
-        // command and can open a Save dialog. Copy + clipboard.exportPng is the
-        // non-interactive, in-memory route intended for bridge integrations.
-        rpc(port, "edit.copy", {});
-        result = rpc(port, "clipboard.exportPng", { scale: scale });
-        if (!result || !result.dataBase64) fail("VectorCraft could not rasterize the selection.");
-        file = writePng(result.dataBase64);
+        // Supplying an explicit path makes exportSelection non-interactive and lets
+        // VectorCraft write the PNG directly. This avoids moving a large Base64
+        // string through ExtendScript and decoding it byte by byte in After Effects.
+        file = nextRasterFile();
+        result = rpc(port, "document.exportSelection", { path: file.fsName, format: "png", scale: scale, background: "transparent", antiAlias: "art" });
+        file = new File(file.fsName);
+        if (!file.exists || file.length < 1) fail("VectorCraft did not create the PNG asset.");
         try {
             footage = app.project.importFile(new ImportOptions(file));
             layer = comp.layers.add(footage);
@@ -253,7 +233,7 @@
             try { if (footage) footage.remove(); } catch (ignore2) {}
             throw e;
         }
-        return { layers: 1, paths: 0, groups: 0, fills: 0, strokes: 0, text: 0, unsupported: 0, unsupportedPaint: 0, emptyPaths: 0, rasterized: true, warnings: result.warnings || [] };
+        return { layers: 1, paths: 0, groups: 0, fills: 0, strokes: 0, text: 0, unsupported: 0, unsupportedPaint: 0, emptyPaths: 0, rasterized: true, selectedCount: doc.selection.length, warnings: result.warnings || [] };
     }
     function transfer(snapshot, comp, options) {
         var board = C.artboard(snapshot.doc, options.artboard), offset = options.center ? [(comp.width - board.width) / 2, (comp.height - board.height) / 2] : [0, 0];
@@ -287,7 +267,11 @@
         return report;
     }
     function reportText(r) {
-        if (r.rasterized) return "Created one combined transparent PNG layer." + (r.warnings && r.warnings.length ? " VectorCraft: " + r.warnings[0] : "");
+        if (r.rasterized) {
+            var rasterMsg = "Created one combined transparent PNG layer from " + r.selectedCount + " selected object" + (r.selectedCount === 1 ? "" : "s") + ".";
+            if (r.selectedCount === 1) rasterMsg += " Select or group separate backdrop/shadow objects too if they are part of the style.";
+            return rasterMsg + (r.warnings && r.warnings.length ? " VectorCraft: " + r.warnings[0] : "");
+        }
         var msg = "Created " + r.layers + " layer" + (r.layers === 1 ? "" : "s") + ", " + r.paths + " path" + (r.paths === 1 ? "" : "s") + ".";
         if (r.unsupported || r.unsupportedPaint) msg += " Simplified/skipped " + (r.unsupported + r.unsupportedPaint) + " unsupported item" + ((r.unsupported + r.unsupportedPaint) === 1 ? "" : "s") + ".";
         if (r.emptyPaths) msg += " Skipped " + r.emptyPaths + " empty path" + (r.emptyPaths === 1 ? "" : "s") + ".";

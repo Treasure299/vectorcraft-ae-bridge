@@ -43,10 +43,12 @@ test("reads basic text data", () => {
   assert.deepEqual(Array.from(info.position), [25, 40]);
 });
 
-test("raster transfer uses VectorCraft's non-interactive clipboard exporter", () => {
-  assert.match(panelSource, /rpc\(port, "edit\.copy", \{\}\)/);
-  assert.match(panelSource, /rpc\(port, "clipboard\.exportPng", \{ scale: scale \}\)/);
-  assert.doesNotMatch(panelSource, /rpc\(port, "document\.exportSelection"/);
+test("raster transfer exports directly to disk without Base64 decoding", () => {
+  assert.match(panelSource, /rpc\(port, "document\.exportSelection", \{ path: file\.fsName/);
+  assert.doesNotMatch(panelSource, /rpc\(port, "clipboard\.exportPng"/);
+  assert.doesNotMatch(panelSource, /function decodeBase64/);
+  assert.match(panelSource, /selectedCount: doc\.selection\.length/);
+  assert.match(panelSource, /Select or group separate backdrop\/shadow objects too/);
 });
 
 test("RPC skips notifications and compares reply ids by their wire value", () => {
